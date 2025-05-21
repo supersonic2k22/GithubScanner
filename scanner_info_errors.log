@@ -1,0 +1,176 @@
+2025-05-21 23:50:24,287 - INFO - Query length: 106 characters, OR operators: 4
+2025-05-21 23:50:24,287 - INFO - Fetching repositories for keywords: crypto OR blockchain OR bitcoin OR ethereum OR solana created after 2025-05-21T19:50...
+2025-05-21 23:50:25,782 - INFO - API requests remaining: 29
+2025-05-21 23:50:27,086 - INFO - API requests remaining: 28
+2025-05-21 23:50:28,088 - INFO - Query length: 89 characters, OR operators: 4
+2025-05-21 23:50:28,088 - INFO - Fetching repositories for keywords: wallet OR defi OR nft OR dex OR dapp created after 2025-05-21T19:50...
+2025-05-21 23:50:28,844 - INFO - API requests remaining: 27
+2025-05-21 23:50:30,129 - INFO - API requests remaining: 26
+2025-05-21 23:50:31,142 - INFO - Query length: 105 characters, OR operators: 4
+2025-05-21 23:50:31,142 - INFO - Fetching repositories for keywords: token OR smartcontract OR web3 OR pumpfun OR raydium created after 2025-05-21T19:50...
+2025-05-21 23:50:31,598 - INFO - API requests remaining: 25
+2025-05-21 23:50:32,914 - INFO - API requests remaining: 24
+2025-05-21 23:50:33,919 - INFO - Query length: 99 characters, OR operators: 4
+2025-05-21 23:50:33,919 - INFO - Fetching repositories for keywords: jupiter OR orca OR serum OR binance OR polygon created after 2025-05-21T19:50...
+2025-05-21 23:50:34,323 - INFO - API requests remaining: 23
+2025-05-21 23:50:35,618 - INFO - API requests remaining: 22
+2025-05-21 23:50:36,632 - INFO - Query length: 109 characters, OR operators: 4
+2025-05-21 23:50:36,632 - INFO - Fetching repositories for keywords: avalanche OR arbitrum OR optimism OR cardano OR polkadot created after 2025-05-21T19:50...
+2025-05-21 23:50:37,012 - INFO - API requests remaining: 21
+2025-05-21 23:50:38,318 - INFO - API requests remaining: 20
+2025-05-21 23:50:39,333 - INFO - Query length: 97 characters, OR operators: 4
+2025-05-21 23:50:39,333 - INFO - Fetching repositories for keywords: cosmos OR tezos OR algorand OR near OR aptos created after 2025-05-21T19:50...
+2025-05-21 23:50:39,699 - INFO - API requests remaining: 19
+2025-05-21 23:50:40,984 - INFO - API requests remaining: 18
+2025-05-21 23:50:41,984 - INFO - Query length: 92 characters, OR operators: 4
+2025-05-21 23:50:41,984 - INFO - Fetching repositories for keywords: sui OR hedera OR tron OR eos OR stellar created after 2025-05-21T19:50...
+2025-05-21 23:50:42,349 - INFO - API requests remaining: 17
+2025-05-21 23:50:43,672 - INFO - API requests remaining: 16
+2025-05-21 23:50:44,678 - INFO - Query length: 103 characters, OR operators: 4
+2025-05-21 23:50:44,678 - INFO - Fetching repositories for keywords: ripple OR chainlink OR uniswap OR aave OR compound created after 2025-05-21T19:50...
+2025-05-21 23:50:45,065 - INFO - API requests remaining: 15
+2025-05-21 23:50:46,338 - INFO - API requests remaining: 14
+2025-05-21 23:50:47,345 - INFO - Query length: 103 characters, OR operators: 4
+2025-05-21 23:50:47,345 - INFO - Fetching repositories for keywords: curve OR sushi OR pancakeswap OR balancer OR yearn created after 2025-05-21T19:50...
+2025-05-21 23:50:47,684 - INFO - API requests remaining: 13
+2025-05-21 23:50:48,988 - INFO - API requests remaining: 12
+2025-05-21 23:50:49,998 - INFO - Query length: 99 characters, OR operators: 4
+2025-05-21 23:50:49,998 - INFO - Fetching repositories for keywords: maker OR synthetix OR 1inch OR kyber OR bancor created after 2025-05-21T19:50...
+2025-05-21 23:50:50,335 - INFO - API requests remaining: 11
+2025-05-21 23:50:51,649 - INFO - API requests remaining: 10
+2025-05-21 23:50:52,661 - INFO - Query length: 106 characters, OR operators: 4
+2025-05-21 23:50:52,661 - INFO - Fetching repositories for keywords: opensea OR rarible OR foundation OR zora OR superrare created after 2025-05-21T19:50...
+2025-05-21 23:50:53,060 - INFO - API requests remaining: 9
+2025-05-21 23:50:53,060 - WARNING - Low API rate limit, pausing for 60 seconds
+2025-05-21 23:51:54,558 - INFO - API requests remaining: 29
+2025-05-21 23:51:55,566 - INFO - Query length: 106 characters, OR operators: 4
+2025-05-21 23:51:55,566 - INFO - Fetching repositories for keywords: niftygateway OR coinbase OR kraken OR kucoin OR bybit created after 2025-05-21T19:50...
+2025-05-21 23:51:55,914 - INFO - API requests remaining: 28
+2025-05-21 23:51:57,221 - INFO - API requests remaining: 27
+2025-05-21 23:51:58,221 - INFO - Query length: 97 characters, OR operators: 4
+2025-05-21 23:51:58,221 - INFO - Fetching repositories for keywords: bitfinex OR huobi OR okx OR gateio OR zksync created after 2025-05-21T19:50...
+2025-05-21 23:51:58,508 - INFO - API requests remaining: 26
+2025-05-21 23:51:59,514 - INFO - Query length: 97 characters, OR operators: 4
+2025-05-21 23:51:59,514 - INFO - Fetching repositories for keywords: starknet OR base OR blast OR linea OR scroll created after 2025-05-21T19:50...
+2025-05-21 23:52:01,029 - INFO - API requests remaining: 25
+2025-05-21 23:52:02,575 - INFO - API requests remaining: 24
+2025-05-21 23:52:03,868 - INFO - API requests remaining: 23
+2025-05-21 23:52:04,882 - INFO - Query length: 90 characters, OR operators: 4
+2025-05-21 23:52:04,882 - INFO - Fetching repositories for keywords: mantle OR matic OR ada OR dot OR atom created after 2025-05-21T19:50...
+2025-05-21 23:52:05,577 - INFO - API requests remaining: 22
+2025-05-21 23:52:06,844 - INFO - API requests remaining: 21
+2025-05-21 23:52:07,854 - INFO - Query length: 86 characters, OR operators: 4
+2025-05-21 23:52:07,854 - INFO - Fetching repositories for keywords: xtz OR algo OR hbar OR trx OR xlm created after 2025-05-21T19:50...
+2025-05-21 23:52:08,566 - INFO - API requests remaining: 20
+2025-05-21 23:52:09,883 - INFO - API requests remaining: 19
+2025-05-21 23:52:10,898 - INFO - Query length: 85 characters, OR operators: 4
+2025-05-21 23:52:10,898 - INFO - Fetching repositories for keywords: xrp OR link OR eth OR sol OR bnb created after 2025-05-21T19:50...
+2025-05-21 23:52:12,033 - INFO - API requests remaining: 18
+2025-05-21 23:52:13,336 - INFO - API requests remaining: 17
+2025-05-21 23:52:14,339 - INFO - Query length: 102 characters, OR operators: 4
+2025-05-21 23:52:14,339 - INFO - Fetching repositories for keywords: avax OR op OR arb OR nonfungible OR decentralized created after 2025-05-21T19:50...
+2025-05-21 23:52:15,745 - INFO - API requests remaining: 16
+2025-05-21 23:52:17,062 - INFO - API requests remaining: 15
+2025-05-21 23:52:18,068 - INFO - Query length: 114 characters, OR operators: 4
+2025-05-21 23:52:18,068 - INFO - Fetching repositories for keywords: yieldfarming OR liquiditypool OR staking OR governance OR dao created after 2025-05-21T19:50...
+2025-05-21 23:52:18,406 - INFO - API requests remaining: 14
+2025-05-21 23:52:19,703 - INFO - API requests remaining: 13
+2025-05-21 23:52:20,713 - INFO - Query length: 94 characters, OR operators: 4
+2025-05-21 23:52:20,713 - INFO - Fetching repositories for keywords: airdrop OR ico OR ido OR ieo OR metaverse created after 2025-05-21T19:50...
+2025-05-21 23:52:21,187 - INFO - API requests remaining: 12
+2025-05-21 23:52:22,477 - INFO - API requests remaining: 11
+2025-05-21 23:52:23,481 - INFO - Query length: 109 characters, OR operators: 4
+2025-05-21 23:52:23,481 - INFO - Fetching repositories for keywords: gamefi OR playtoearn OR cryptowallet OR ledger OR trezor created after 2025-05-21T19:50...
+2025-05-21 23:52:23,771 - INFO - API requests remaining: 10
+2025-05-21 23:52:24,772 - INFO - Query length: 110 characters, OR operators: 4
+2025-05-21 23:52:24,772 - INFO - Fetching repositories for keywords: metamask OR trustwallet OR safepal OR phantom OR solflare created after 2025-05-21T19:50...
+2025-05-21 23:52:25,120 - INFO - API requests remaining: 9
+2025-05-21 23:52:25,120 - WARNING - Low API rate limit, pausing for 60 seconds
+2025-05-21 23:53:26,919 - INFO - API requests remaining: 29
+2025-05-21 23:53:27,921 - INFO - Query length: 100 characters, OR operators: 4
+2025-05-21 23:53:27,921 - INFO - Fetching repositories for keywords: saber OR marinade OR drift OR stepn OR francium created after 2025-05-21T19:50...
+2025-05-21 23:53:28,259 - INFO - API requests remaining: 28
+2025-05-21 23:53:29,557 - INFO - API requests remaining: 27
+2025-05-21 23:53:30,569 - INFO - Query length: 102 characters, OR operators: 4
+2025-05-21 23:53:30,569 - INFO - Fetching repositories for keywords: tulip OR mango OR lifinity OR atrix OR psyoptions created after 2025-05-21T19:50...
+2025-05-21 23:53:30,900 - INFO - API requests remaining: 26
+2025-05-21 23:53:32,173 - INFO - API requests remaining: 25
+2025-05-21 23:53:33,174 - INFO - Query length: 103 characters, OR operators: 4
+2025-05-21 23:53:33,174 - INFO - Fetching repositories for keywords: zeta OR bonfida OR aurory OR staratlas OR degenape created after 2025-05-21T19:50...
+2025-05-21 23:53:33,471 - INFO - API requests remaining: 24
+2025-05-21 23:53:34,477 - INFO - Query length: 101 characters, OR operators: 4
+2025-05-21 23:53:34,477 - INFO - Fetching repositories for keywords: solsea OR magiceden OR ftx OR gemini OR bitstamp created after 2025-05-21T19:50...
+2025-05-21 23:53:34,895 - INFO - API requests remaining: 23
+2025-05-21 23:53:36,182 - INFO - API requests remaining: 22
+2025-05-21 23:53:37,193 - INFO - Query length: 112 characters, OR operators: 4
+2025-05-21 23:53:37,193 - INFO - Fetching repositories for keywords: bittrex OR upbit OR decentraland OR sandbox OR axieinfinity created after 2025-05-21T19:50...
+2025-05-21 23:53:37,555 - INFO - API requests remaining: 21
+2025-05-21 23:53:38,828 - INFO - API requests remaining: 20
+2025-05-21 23:53:39,828 - INFO - Query length: 107 characters, OR operators: 4
+2025-05-21 23:53:39,828 - INFO - Fetching repositories for keywords: cryptopunks OR boredape OR meebits OR doodles OR azuki created after 2025-05-21T19:50...
+2025-05-21 23:53:40,098 - INFO - API requests remaining: 19
+2025-05-21 23:53:41,102 - INFO - Query length: 115 characters, OR operators: 4
+2025-05-21 23:53:41,102 - INFO - Fetching repositories for keywords: clonex OR moonbirds OR veefriends OR worldofwomen OR artblocks created after 2025-05-21T19:50...
+2025-05-21 23:53:41,400 - INFO - API requests remaining: 18
+2025-05-21 23:53:42,408 - INFO - Query length: 100 characters, OR operators: 4
+2025-05-21 23:53:42,408 - INFO - Fetching repositories for keywords: chromie OR pudgypenguins OR bayc OR mayc OR ens created after 2025-05-21T19:50...
+2025-05-21 23:53:42,684 - INFO - API requests remaining: 17
+2025-05-21 23:53:43,694 - INFO - Query length: 101 characters, OR operators: 4
+2025-05-21 23:53:43,694 - INFO - Fetching repositories for keywords: lens OR crosschain OR bridge OR layer2 OR rollup created after 2025-05-21T19:50...
+2025-05-21 23:53:44,124 - INFO - API requests remaining: 16
+2025-05-21 23:53:45,401 - INFO - API requests remaining: 15
+2025-05-21 23:53:46,404 - INFO - Query length: 46 characters, OR operators: 0
+2025-05-21 23:53:46,404 - INFO - Fetching repositories for keywords: sidechain created after 2025-05-21T19:50...
+2025-05-21 23:53:46,710 - INFO - API requests remaining: 14
+2025-05-21 23:53:47,725 - INFO - Fetched 404 repositories created after 2025-05-21T19:50
+2025-05-21 23:53:48,959 - WARNING - Failed to fetch contents for mukti-nux/link-tracker-firebse: 404
+2025-05-21 23:53:50,277 - WARNING - Failed to fetch contents for airi103/linked-lists: 404
+2025-05-21 23:53:50,542 - WARNING - Failed to fetch contents for FrenchCommando/data-options: 404
+2025-05-21 23:53:51,495 - WARNING - Failed to fetch contents for Shootware/HeartLink: 404
+2025-05-21 23:53:51,682 - WARNING - Failed to fetch contents for cmerict/OpesTrendModel: 404
+2025-05-21 23:53:52,412 - WARNING - Failed to fetch contents for Sh1vang-ggwp/Iot-based-smart-pill-remainder: 404
+2025-05-21 23:53:54,760 - WARNING - Failed to fetch contents for halpar/framework-agnostic-mf-sandbox: 404
+2025-05-21 23:53:57,569 - WARNING - Failed to fetch contents for SAHITHIREDDY-GUDIPATI/youtube_trending_pipeline: 404
+2025-05-21 23:54:01,214 - WARNING - Failed to fetch contents for kharsans/CNN-Cat-and-dog-Image-Prediction-model-: 404
+2025-05-21 23:54:11,196 - WARNING - Timeout scanning ashuai168/sui-mev: exceeded 10 seconds
+2025-05-21 23:54:11,685 - WARNING - Failed to fetch contents for Phtrader043/Bot-BTC-ETH: 404
+2025-05-21 23:54:11,942 - WARNING - Failed to fetch contents for HeydarliAtabay/walletApp: 404
+2025-05-21 23:54:15,308 - WARNING - Failed to fetch contents for Watler12l/code-for-soft-ware-foundations: 404
+2025-05-21 23:54:17,206 - WARNING - Failed to fetch contents for PredictionMarketing/xrpgame: 404
+2025-05-21 23:54:21,373 - WARNING - Failed to fetch contents for OxIsrafil/Sign2048: 404
+2025-05-21 23:54:22,143 - WARNING - Failed to fetch contents for 04Phantom/04Phantom: 404
+2025-05-21 23:54:28,387 - WARNING - Failed to fetch contents for taloos25/ATONS: 404
+2025-05-21 23:54:29,825 - WARNING - Failed to fetch contents for HOUKENG1/Mon-portfolio-: 404
+2025-05-21 23:54:30,083 - WARNING - Failed to fetch contents for SoV3n04ek/Simple-SingleR-DotNet9-project: 404
+2025-05-21 23:54:35,344 - WARNING - Failed to fetch contents for adambournes21/adambournes2.github.io: 404
+2025-05-21 23:54:36,087 - WARNING - Failed to fetch contents for OrtegaGar117/Calculadora-OpenSource: 404
+2025-05-21 23:54:42,101 - WARNING - Failed to fetch contents for Otra10/soly: 404
+2025-05-21 23:54:51,901 - WARNING - Failed to fetch contents for Splinter047/PolySim: 404
+2025-05-21 23:54:53,413 - WARNING - Failed to fetch contents for zaikovska/Sales-Optimization-Analysis: 404
+2025-05-21 23:54:55,769 - WARNING - Failed to fetch contents for mounikanreddy1989/DevOps_new: 404
+2025-05-21 23:54:59,349 - WARNING - Failed to fetch contents for malphons/GeneticAlgoMultiObj1: 404
+2025-05-21 23:55:00,408 - WARNING - Failed to fetch contents for ArthurBispo00/Challenge_Sprint1_DevOps: 404
+2025-05-21 23:55:03,362 - WARNING - Failed to fetch contents for coinbase-help-center/coinbase-help-center.github.io: 404
+2025-05-21 23:55:03,951 - WARNING - Failed to fetch contents for npave/gemini-projects: 404
+2025-05-21 23:55:06,537 - WARNING - Failed to fetch contents for CELESTAKIM/DEKUTPROJECT: 404
+2025-05-21 23:55:07,007 - WARNING - Failed to fetch contents for DevWajeh/DevOps-CapstoneProject-ChampionsTeam: 404
+2025-05-21 23:55:08,499 - WARNING - Failed to fetch contents for camilo28k/Proyecto_base_de_daatos: 404
+2025-05-21 23:55:11,046 - WARNING - Failed to fetch contents for marcella-frnnd/projeto-python-openai: 404
+2025-05-21 23:55:15,376 - WARNING - Failed to fetch contents for sochalay24/Priviledged-Access-Management-Tool: 404
+2025-05-21 23:55:17,679 - WARNING - Failed to fetch contents for Farida-Waheed/Car_Diagnosis_Expert_System: 404
+2025-05-21 23:55:21,377 - WARNING - Failed to fetch contents for Snitteren83/crypto-symbols: 404
+2025-05-21 23:55:26,683 - WARNING - Failed to fetch contents for sophada/SCoin-Blockchain: 404
+2025-05-21 23:55:27,927 - WARNING - Failed to fetch contents for Dexterchhoria/project-francium: 404
+2025-05-21 23:55:29,235 - WARNING - Failed to fetch contents for snegurova/goit-algo2-hw-04: 404
+2025-05-21 23:55:40,977 - WARNING - Failed to fetch contents for Gutierrez-Escobar-AJ/OptiK: 404
+2025-05-21 23:55:47,837 - WARNING - Failed to fetch contents for matthewtognotti/dotfiles: 404
+2025-05-21 23:55:53,707 - WARNING - Failed to fetch contents for nievyx/class-based-rpg-python: 404
+2025-05-21 23:55:57,538 - WARNING - Failed to fetch contents for turbocep/Sudoku-solver: 404
+2025-05-21 23:56:00,810 - WARNING - Failed to fetch contents for isfix/Algorithmic_Trading_1: 404
+2025-05-21 23:56:03,087 - WARNING - Failed to fetch contents for AtifWeb/cryptobanxadmin: 404
+2025-05-21 23:56:05,317 - WARNING - Failed to fetch contents for Kubs25/linkedlist: 404
+2025-05-21 23:56:07,818 - WARNING - Failed to fetch contents for zeinaaahmedd/operatin_system: 404
+2025-05-21 23:56:08,054 - WARNING - Failed to fetch contents for odaifaiz/Schedular_algorithm: 404
+2025-05-21 23:56:08,776 - WARNING - Failed to fetch contents for andreshi40/Taller2-sistemas-operativos: 404
+2025-05-21 23:56:14,231 - WARNING - Failed to fetch contents for Bogdy3145/CrosswordsMaker: 404
+2025-05-21 23:56:16,703 - INFO - Waiting 60 seconds for next scan...

